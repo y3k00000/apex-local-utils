@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/lafriks/go-shamir"
 )
@@ -118,17 +119,29 @@ type DeviceInfo struct {
 }
 
 type RegisterResponse struct {
-	Result  int    `json:"result"`
-	End     string `json:"end"`
-	Message string `json:"message"`
+	Result      int                    `json:"result"`
+	Expire      string                 `json:"expire"`
+	Message     string                 `json:"message"`
+	Left        int                    `json:"left"`
+	License     map[string]interface{} `json:"license"`
+	LicenseHash string                 `json:"license_hash"`
+}
+
+type License struct {
+	Key      string                 `json:"key"`
+	Expire   string                 `json:"expire"`
+	Start    int64                  `json:"start"`
+	Left     int                    `json:"left"`
+	Meta     map[string]interface{} `json:"meta"`
+	MetaHash string                 `json:"meta_hash"`
 }
 
 func (response *RegisterResponse) Decrypt() error {
-	decrypted, err := aes_gcm_decrypt(response.End)
+	decrypted, err := aes_gcm_decrypt(response.Expire)
 	if err != nil {
 		return err
 	}
-	response.End = decrypted
+	response.Expire = decrypted
 	return nil
 }
 
@@ -171,8 +184,9 @@ func registerSerial(ethMac string, serial string, debug bool) (result RegisterRe
 
 func main() {
 	const (
-		DATA_DIR       = "/etc/apex-privatebox/"
-		CRYPT_KEY_FILE = DATA_DIR + "crypt_key"
+		DATA_DIR           = "/etc/apex-privatebox/"
+		LICENSE_FILE       = DATA_DIR + "license"
+		DEVICE_INFO_SPLITS = 10
 
 		SUCCESS         = 0
 		ERR_NETWORK     = -1
@@ -210,7 +224,7 @@ func main() {
 		fmt.Printf("%s", output)
 		os.Exit(exit_code)
 	}()
-	_, err = os.ReadFile(CRYPT_KEY_FILE)
+	_, err = os.ReadFile(LICENSE_FILE)
 	if err == nil {
 		result = ERR_REGISTERED
 		err = fmt.Errorf("already registered")
@@ -226,19 +240,6 @@ func main() {
 		}
 		return
 	}
-	crypt_key := make([]byte, 32)
-	rand.Read(crypt_key)
-	key_base64 = base64.URLEncoding.EncodeToString(crypt_key)
-	if debug {
-		fmt.Println("key_base64 = ", key_base64)
-	}
-	key_encrypted, err := aes_gcm_encrypt(key_base64)
-	if err != nil {
-		result = ERR_ENCRYPT
-		err = fmt.Errorf("crypt key encryption failed: %v", err)
-		return
-	}
-	const DEVICE_INFO_SPLITS = 10
 	device_info_splits := make([][]byte, 0)
 	for i := 0; i < DEVICE_INFO_SPLITS; i++ {
 		split, err := os.ReadFile(fmt.Sprintf("%sdevice_info_%02d.info", DATA_DIR, i))
@@ -277,6 +278,8 @@ func main() {
 		err = fmt.Errorf("device info unmarshal failed: %v", err)
 		return
 	}
+	now := time.Now()
+	now_epoch := now.Unix()
 	registerResult, err = registerSerial(device_info.Mac, serial, debug)
 	if debug {
 		fmt.Printf("registerResult = %+v\n", registerResult)
@@ -284,6 +287,20 @@ func main() {
 	if err != nil || registerResult.Result != 0 {
 		result = ERR_REGISTER
 		err = fmt.Errorf("register failed: %v", err)
+		return
+	}
+	crypt_key := make([]byte, 32)
+	rand.Read(crypt_key)
+	key_base64 = base64.URLEncoding.EncodeToString(crypt_key)
+	if debug {
+		fmt.Println("key_base64 = ", key_base64)
+	}
+	// TODO: save license to file
+	license := License{Key: key_base64}
+	license_encrypted, err := aes_gcm_encrypt(key_base64)
+	if err != nil {
+		result = ERR_ENCRYPT
+		err = fmt.Errorf("license encryption failed: %v", err)
 		return
 	}
 	fmt.Println(string(device_info_decrypted))
