@@ -2,11 +2,9 @@ package main
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,74 +12,10 @@ import (
 	"os"
 	"time"
 
+	"core"
+
 	"github.com/lafriks/go-shamir"
 )
-
-// func findInterfaceHWAddr(name string) (hwAddr string, err error) {
-// 	interfaces, err := net.Interfaces()
-// 	if err != nil {
-// 		return "", err
-// 	}
-// 	for _, i := range interfaces {
-// 		if i.Name == name {
-// 			return i.HardwareAddr.String(), nil
-// 		}
-// 	}
-// 	return "", fmt.Errorf("interface not found")
-// }
-
-func aes_gcm_encrypt(plain string) (string, error) {
-	// plain := "hello world"
-	key_hex := "64cb5d3131ce0122f858ea27ea9ce209294cb19caef155132668ace5c4574d43"
-	key, _ := hex.DecodeString(key_hex)
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	aesgcm, err := cipher.NewGCMWithNonceSize(block, 12)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, 12)
-	rand.Read(nonce)
-	// fmt.Println("nonce = ", hex.EncodeToString(nonce))
-	encrypted := aesgcm.Seal(nil, nonce, []byte(plain), nil)
-	// fmt.Println("encrypted = ", hex.EncodeToString(encrypted))
-	encrypted_b64 := base64.StdEncoding.EncodeToString(append(nonce, encrypted...))
-	return encrypted_b64, nil
-}
-
-func aes_gcm_decrypt(encrypted_b64 string) (string, error) {
-	// encrypted_b64 := "k6aa+zf8zL8c8l8vsX6VJFwWRiii7mYZH+T8D88J5LCz"
-	encrypted, _ := base64.StdEncoding.DecodeString(encrypted_b64)
-	// fmt.Printf("encrypted.lenth = %d\n", len(encrypted))
-	// encrypted_hex := hex.EncodeToString(encrypted)
-	// fmt.Println("encrypted = ", encrypted_hex)
-	if len(encrypted) < 12 {
-		return "", fmt.Errorf("encrypted data too short")
-	}
-	key_hex := "64cb5d3131ce0122f858ea27ea9ce209294cb19caef155132668ace5c4574d43"
-	key, _ := hex.DecodeString(key_hex)
-	// fmt.Printf("key.lenth = %d\n", len(key))
-	block, err := aes.NewCipher(key)
-	if err != nil {
-		return "", err
-	}
-	aesgcm, err := cipher.NewGCMWithNonceSize(block, 12)
-	if err != nil {
-		return "", err
-	}
-	iv := encrypted[:12]
-	// fmt.Println("iv = ", hex.EncodeToString(iv))
-	body := encrypted[12:]
-	// fmt.Println("body = ", hex.EncodeToString(body))
-	decrypted, err := aesgcm.Open(nil, iv, body, nil)
-	if err != nil {
-		return "", err
-	}
-	return string(decrypted), nil
-	// fmt.Println(string(decrypted))
-}
 
 // func httpGet(url string) (string, error) {
 // 	resp, err := http.Get(url)
@@ -113,78 +47,56 @@ func httpPostJson(url string, body map[string]interface{}) (string, error) {
 	return string(result_body), nil
 }
 
-type DeviceInfo struct {
-	Mac     string `json:"mac"`
-	WifiMac string `json:"wifi-mac"`
+func pseudoResponse() (string, error) {
+	expoire_encrypted, _ := core.AesGcmEncrypt("2025-10-10 00:00:00")
+	left_encrypted, _ := core.AesGcmEncrypt(fmt.Sprintf("%d", 720*24*60*60))
+	license := map[string]interface{}{"seller": "順發3D", "name": "華碩電惱", "total_pieces": 1000}
+	license_json, _ := json.Marshal(license)
+	license_encrypted, _ := core.AesGcmEncrypt(string(license_json))
+	license_hash := sha256.Sum256(license_json)
+	response := core.RegisterResponse{Result: 0, Expire: expoire_encrypted, Left: left_encrypted, License: license_encrypted, LicenseHash: base64.URLEncoding.EncodeToString(license_hash[:]), Message: "0"}
+	response_json, _ := json.Marshal(response)
+	return string(response_json), nil
 }
 
-type RegisterResponse struct {
-	Result      int                    `json:"result"`
-	Expire      string                 `json:"expire"`
-	Message     string                 `json:"message"`
-	Left        int                    `json:"left"`
-	License     map[string]interface{} `json:"license"`
-	LicenseHash string                 `json:"license_hash"`
-}
-
-type License struct {
-	Key      string                 `json:"key"`
-	Expire   string                 `json:"expire"`
-	Start    int64                  `json:"start"`
-	Left     int                    `json:"left"`
-	Meta     map[string]interface{} `json:"meta"`
-	MetaHash string                 `json:"meta_hash"`
-}
-
-func (response *RegisterResponse) Decrypt() error {
-	decrypted, err := aes_gcm_decrypt(response.Expire)
-	if err != nil {
-		return err
-	}
-	response.Expire = decrypted
-	return nil
-}
-
-func registerSerial(ethMac string, serial string, debug bool) (result RegisterResponse, err error) {
-	ethMac_encrypted, err := aes_gcm_encrypt(ethMac)
-	if err != nil {
-		return
-	}
-	serial_encrypted, err := aes_gcm_encrypt(serial)
-	if err != nil {
-		return
-	}
-	post_body_json := map[string]interface{}{"type": "local_apex", "mac": ethMac_encrypted, "serial": serial_encrypted}
-	result_string, err := httpPostJson("https://apex.cmoremap.com.tw/pm_apex/bundle_aws.php", post_body_json)
+func registerSerial(ethMac string, serial string, debug bool) (result *core.RegisterResponse, err error) {
+	// ethMac_encrypted, err := core.AesGcmEncrypt(ethMac)
+	// if err != nil {
+	// 	return
+	// }
+	// serial_encrypted, err := aes_gcore.AesGcmEncryptcm_encrypt(serial)
+	// if err != nil {
+	// 	return
+	// }
+	// post_body_json := map[string]interface{}{"type": "local_apex", "mac": ethMac_encrypted, "serial": serial_encrypted}
+	// result_string, err := httpPostJson("https://apex.cmoremap.com.tw/pm_apex/bundle_aws.php", post_body_json)
+	result_string, err := pseudoResponse()
 	if debug {
 		fmt.Println("register result_string = ", result_string)
 		fmt.Printf("register err = %v\n", err)
 	}
 	if err != nil {
-		return
+		return nil, err
 	}
-	var unparsedResult RegisterResponse = RegisterResponse{}
-	err = json.Unmarshal([]byte(result_string), &unparsedResult)
+	err = json.Unmarshal([]byte(result_string), &result)
 	if debug {
-		fmt.Printf("unparsedResult = %+v\n", unparsedResult)
+		fmt.Printf("unparsedResult = %+v\n", result)
 	}
-	result = unparsedResult
 	if err != nil || result.Result != 0 {
-		return
+		if debug {
+			fmt.Printf("register failed: %v\n%v\n", err, result_string)
+		}
+		return nil, err
 	}
 	if debug {
 		fmt.Printf("parsedResult = %+v\n", result)
-	}
-	err = result.Decrypt()
-	if err != nil {
-		return
 	}
 	return
 }
 
 func main() {
 	const (
-		DATA_DIR           = "/etc/apex-privatebox/"
+		DATA_DIR           = "./"
 		LICENSE_FILE       = DATA_DIR + "license"
 		DEVICE_INFO_SPLITS = 10
 
@@ -200,9 +112,23 @@ func main() {
 	)
 	var err error
 	var msg string
-	var key_base64 string
+	var license *core.License = nil
 	var result = ERR_UNKNOWN
-	var registerResult RegisterResponse
+	var registerResult *core.RegisterResponse
+	defer func() {
+		exit_code := 0
+		if err != nil {
+			msg = err.Error()
+			license = nil
+			exit_code = 1
+		}
+		output, err := json.Marshal(map[string]interface{}{"msg": msg, "result": result, "token": "valid", "data": registerResult})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("%s", output)
+		os.Exit(exit_code)
+	}()
 	if len(os.Args) < 2 || os.Args[1] == "" {
 		result = ERR_INPUT
 		err = fmt.Errorf("provided serial is empty")
@@ -210,20 +136,6 @@ func main() {
 	}
 	serial := os.Args[1]
 	debug := len(os.Args) > 2 && os.Args[2] == "debug"
-	defer func() {
-		exit_code := 0
-		if err != nil {
-			msg = err.Error()
-			key_base64 = ""
-			exit_code = 1
-		}
-		output, err := json.Marshal(map[string]interface{}{"msg": msg, "result": result, "key": key_base64, "data": registerResult})
-		if err != nil {
-			panic(err)
-		}
-		fmt.Printf("%s", output)
-		os.Exit(exit_code)
-	}()
 	_, err = os.ReadFile(LICENSE_FILE)
 	if err == nil {
 		result = ERR_REGISTERED
@@ -262,7 +174,7 @@ func main() {
 	if debug {
 		fmt.Printf("device_info_encrypted = %s\n", device_info_encrypted)
 	}
-	device_info_decrypted, err := aes_gcm_decrypt(device_info_encrypted)
+	device_info_decrypted, err := core.AesGcmDecrypt(device_info_encrypted)
 	if err != nil {
 		result = ERR_ENCRYPT
 		err = fmt.Errorf("device info decryption failed: %v", err)
@@ -271,15 +183,13 @@ func main() {
 	if debug {
 		fmt.Printf("device_info_decrypted = %s\n", device_info_decrypted)
 	}
-	var device_info DeviceInfo = DeviceInfo{}
+	var device_info core.DeviceInfo = core.DeviceInfo{}
 	err = json.Unmarshal([]byte(device_info_decrypted), &device_info)
 	if err != nil {
 		result = ERR_DEVICE_INFO
 		err = fmt.Errorf("device info unmarshal failed: %v", err)
 		return
 	}
-	now := time.Now()
-	now_epoch := now.Unix()
 	registerResult, err = registerSerial(device_info.Mac, serial, debug)
 	if debug {
 		fmt.Printf("registerResult = %+v\n", registerResult)
@@ -291,20 +201,26 @@ func main() {
 	}
 	crypt_key := make([]byte, 32)
 	rand.Read(crypt_key)
-	key_base64 = base64.URLEncoding.EncodeToString(crypt_key)
-	if debug {
-		fmt.Println("key_base64 = ", key_base64)
+	license, err = registerResult.ParseLicense(crypt_key, device_info, time.Now())
+	if err != nil {
+		result = ERR_UNKNOWN
+		err = fmt.Errorf("license parse failed: %v", err)
+		return
 	}
-	// TODO: save license to file
-	license := License{Key: key_base64}
-	license_encrypted, err := aes_gcm_encrypt(key_base64)
+	license_json, err := json.Marshal(license)
+	if err != nil {
+		result = ERR_UNKNOWN
+		err = fmt.Errorf("license marshal failed: %v", err)
+		return
+	}
+	license_encrypted, err := core.AesGcmEncrypt(string(license_json))
 	if err != nil {
 		result = ERR_ENCRYPT
 		err = fmt.Errorf("license encryption failed: %v", err)
 		return
 	}
 	fmt.Println(string(device_info_decrypted))
-	err = os.WriteFile(CRYPT_KEY_FILE, []byte(key_encrypted), 0644)
+	err = os.WriteFile(LICENSE_FILE, []byte(license_encrypted), 0644)
 	if err != nil {
 		if debug {
 			fmt.Printf("write crypt key failed: %v\n", err)
