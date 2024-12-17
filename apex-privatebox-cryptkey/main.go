@@ -10,7 +10,7 @@ import (
 func main() {
 	debug := len(os.Args) > 1 && os.Args[1] == "debug"
 	const (
-		DATA_DIR     = "./"
+		DATA_DIR     = "./" // "/etc/apex-privatebox/"
 		LICENSE_FILE = DATA_DIR + "license"
 
 		SUCCESS          = 0

@@ -96,7 +96,7 @@ func registerSerial(ethMac string, serial string, debug bool) (result *core.Regi
 
 func main() {
 	const (
-		DATA_DIR           = "./"
+		DATA_DIR           = "./" // "/etc/apex-privatebox/"
 		LICENSE_FILE       = DATA_DIR + "license"
 		DEVICE_INFO_SPLITS = 10
 

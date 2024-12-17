@@ -75,7 +75,7 @@ func getAsusWifiMac() (string, error) {
 	// return mac, nil
 }
 
-func registerMAC(ethMac string, wifiMac string) (result core.OnboardResponse, err error) {
+func onboardMAC(ethMac string, wifiMac string) (result core.OnboardResponse, err error) {
 	return core.OnboardResponse{Result: 0, Message: "Success"}, nil
 	// ethMac_encrypted, err := core.AesGcmEncrypt(ethMac)
 	// if err != nil {
@@ -137,7 +137,7 @@ func main() {
 		// wifiMac = "00:00:00:00:00:00"
 		return
 	}
-	onboard_response, err = registerMAC(mac, wifiMac)
+	onboard_response, err = onboardMAC(mac, wifiMac)
 	if err != nil {
 		result = ERR_REGISTER
 		return
