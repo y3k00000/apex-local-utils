@@ -8,72 +8,88 @@ import (
 )
 
 func main() {
-	debug := len(os.Args) > 1 && os.Args[1] == "debug"
 	const (
 		DATA_DIR     = "./" // "/etc/apex-privatebox/"
 		LICENSE_FILE = DATA_DIR + "license"
 
-		SUCCESS          = 0
-		ERR_FILE_IO      = -1
-		ERR_DECRYPT      = -2
-		ERR_NOT_RESTERED = -3
-		ERR_UNKNOWN      = -4
+		SUCCESS            = 0
+		ERR_FILE_IO        = -1
+		ERR_DECRYPT        = -2
+		ERR_NOT_REGISTERED = -3
+		ERR_EXPIRED        = -4
+		ERR_INPUT          = -5
+		ERR_UNKNOWN        = -6
 	)
 	var err error
 	var msg string
-	var key_base64 string
+	var license *core.License = nil
+	var nextToken *string = nil
 	var result = ERR_UNKNOWN
 	defer func() {
 		exit_code := 0
 		if err != nil {
 			msg = err.Error()
-			key_base64 = ""
+			license = nil
 			exit_code = 1
 		}
-		output, err := json.Marshal(map[string]interface{}{"msg": msg, "result": result, "key": key_base64})
+		result := map[string]interface{}{"msg": msg, "result": result}
+		if license != nil {
+			result["license"] = license.Meta
+			result["expire"] = license.Expire
+			result["license_hash"] = license.MetaHash
+			result["key"] = license.Key
+			result["token"] = nextToken
+		}
+		output, err := json.Marshal(result)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Printf("%s", output)
 		os.Exit(exit_code)
 	}()
+	debug := len(os.Args) > 2 && os.Args[2] == "debug"
+	if len(os.Args) < 2 || os.Args[1] == "" {
+		result = ERR_INPUT
+		err = fmt.Errorf("no token provided")
+		return
+	}
+	token := &os.Args[1]
 	license_data, err := os.ReadFile(LICENSE_FILE)
 	if debug {
-		fmt.Println("crypt_key_data = ", license_data)
+		fmt.Println("license_data = ", license_data)
+	}
+	if debug {
+		fmt.Println("token = ", token)
 	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			if debug {
-				fmt.Println("crypt key file not found")
+				fmt.Println("license key file not found")
 			}
-			result = ERR_NOT_RESTERED
-			err = fmt.Errorf("crypt key file not found: %v", err)
+			result = ERR_NOT_REGISTERED
+			err = fmt.Errorf("license file not found: %v", err)
 		} else {
 			result = ERR_FILE_IO
 			if debug {
-				fmt.Println("read crypt key failed: ", err)
+				fmt.Println("read license failed: ", err)
 			}
-			err = fmt.Errorf("read crypt key failed: %v", err)
+			err = fmt.Errorf("read license failed: %v", err)
 		}
 		return
 	}
-	license_decrypted, err := core.AesGcmDecrypt(string(license_data))
+	license, err = core.DecryptLicense(string(license_data))
+	if err != nil {
+		result = ERR_DECRYPT
+		if debug {
+			fmt.Println("decrypt license failed: ", string(license_data))
+		}
+		err = fmt.Errorf("decrypt license failed: %v", err)
+		return
+	}
 	if debug {
-		fmt.Println("license_decrypted = ", key_base64)
+		fmt.Println("debug license = ", license)
 	}
-	if err != nil {
-		result = ERR_DECRYPT
-		err = fmt.Errorf("crypt key decryption failed: %v", err)
-		return
-	}
-	var license core.License
-	err = json.Unmarshal([]byte(license_decrypted), &license)
-	if err != nil {
-		result = ERR_DECRYPT
-		err = fmt.Errorf("crypt key decryption failed: %v", err)
-		return
-	}
-	key_base64 = license.Key
+	*nextToken = license.NextToken(token)
 	result = SUCCESS
 	msg = "success"
 }

@@ -35,7 +35,14 @@ func httpPostJson(url string, body map[string]interface{}) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
+	request, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Key", "HsWHbfqtCPcVMRxvVwqP8NeUpTbF4sz6")
+	resp, err := http.DefaultClient.Do(request)
+	// resp, err := http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", err
 	}
@@ -60,17 +67,17 @@ func pseudoResponse() (string, error) {
 }
 
 func registerSerial(ethMac string, serial string, debug bool) (result *core.RegisterResponse, err error) {
-	// ethMac_encrypted, err := core.AesGcmEncrypt(ethMac)
-	// if err != nil {
-	// 	return
-	// }
-	// serial_encrypted, err := aes_gcore.AesGcmEncryptcm_encrypt(serial)
-	// if err != nil {
-	// 	return
-	// }
-	// post_body_json := map[string]interface{}{"type": "local_apex", "mac": ethMac_encrypted, "serial": serial_encrypted}
-	// result_string, err := httpPostJson("https://apex.cmoremap.com.tw/pm_apex/bundle_aws.php", post_body_json)
-	result_string, err := pseudoResponse()
+	ethMac_encrypted, err := core.AesGcmEncrypt(ethMac)
+	if err != nil {
+		return
+	}
+	serial_encrypted, err := core.AesGcmEncrypt(serial)
+	if err != nil {
+		return
+	}
+	post_body_json := map[string]interface{}{"type": "local_apex", "mac": ethMac_encrypted, "serial": serial_encrypted}
+	result_string, err := httpPostJson("https://apex.cmoremap.com.tw/pm_apex/bundle_aws.php", post_body_json)
+	// result_string, err := pseudoResponse()
 	if debug {
 		fmt.Println("register result_string = ", result_string)
 		fmt.Printf("register err = %v\n", err)
@@ -122,7 +129,14 @@ func main() {
 			license = nil
 			exit_code = 1
 		}
-		output, err := json.Marshal(map[string]interface{}{"msg": msg, "result": result, "token": "valid", "data": registerResult})
+		outputContent := map[string]interface{}{"msg": msg, "result": result}
+		if license != nil {
+			outputContent["license"] = license.Meta
+			outputContent["expire"] = license.Expire
+			outputContent["license_hash"] = license.MetaHash
+			outputContent["token"] = license.NextToken(nil)
+		}
+		output, err := json.Marshal(outputContent)
 		if err != nil {
 			panic(err)
 		}
@@ -219,7 +233,6 @@ func main() {
 		err = fmt.Errorf("license encryption failed: %v", err)
 		return
 	}
-	fmt.Println(string(device_info_decrypted))
 	err = os.WriteFile(LICENSE_FILE, []byte(license_encrypted), 0644)
 	if err != nil {
 		if debug {

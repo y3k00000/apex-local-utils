@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -135,4 +136,41 @@ func (license *License) ParseExpire() (time.Time, error) {
 		return time.Time{}, err
 	}
 	return expire, nil
+}
+
+func DecryptLicense(licenseEncrypted string) (*License, error) {
+	licenseDecrypted, err := AesGcmDecrypt(licenseEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	license := &License{}
+	err = json.Unmarshal([]byte(licenseDecrypted), license)
+	if err != nil {
+		return nil, err
+	}
+	if license.Key == "" || (license.DeviceInfo.Mac == "" || license.DeviceInfo.WifiMac == "") || license.Expire == "" || license.Start == 0 || (license.Meta == nil || len(license.Meta) == 0) || license.MetaHash == "" {
+		return nil, fmt.Errorf("invalid license data")
+	}
+	return license, nil
+}
+
+func (license *License) CheckExpire() (bool, error) {
+	expire, err := license.ParseExpire()
+	if err != nil {
+		return false, err
+	}
+	now := time.Now()
+	if now.After(expire) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func (license *License) NextToken(lastToken *string) string {
+	// var lastTokenBytes []byte
+	if lastToken == nil {
+		return "012345"
+	}
+	// TODO
+	return ""
 }
