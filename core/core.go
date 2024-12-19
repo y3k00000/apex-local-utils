@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -70,7 +71,10 @@ func IsExpiredError(err error) bool {
 func AesGcmEncrypt(plain string) (string, error) {
 	// plain := "hello world"
 	key_hex := "64cb5d3131ce0122f858ea27ea9ce209294cb19caef155132668ace5c4574d43"
-	key, _ := hex.DecodeString(key_hex)
+	key, err := hex.DecodeString(key_hex)
+	if err != nil {
+		return "", err
+	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return "", err
@@ -90,12 +94,18 @@ func AesGcmEncrypt(plain string) (string, error) {
 
 func AesGcmDecrypt(encrypted_b64 string) (string, error) {
 	// encrypted_b64 := "k6aa+zf8zL8c8l8vsX6VJFwWRiii7mYZH+T8D88J5LCz"
-	encrypted, _ := base64.StdEncoding.DecodeString(encrypted_b64)
+	encrypted, err := base64.StdEncoding.DecodeString(encrypted_b64)
+	if err != nil {
+		return "", err
+	}
 	// fmt.Printf("encrypted.lenth = %d\n", len(encrypted))
 	// encrypted_hex := hex.EncodeToString(encrypted)
 	// fmt.Println("encrypted = ", encrypted_hex)
 	key_hex := "64cb5d3131ce0122f858ea27ea9ce209294cb19caef155132668ace5c4574d43"
-	key, _ := hex.DecodeString(key_hex)
+	key, err := hex.DecodeString(key_hex)
+	if err != nil {
+		return "", err
+	}
 	// fmt.Printf("key.lenth = %d\n", len(key))
 	block, err := aes.NewCipher(key)
 	if err != nil {
@@ -111,6 +121,7 @@ func AesGcmDecrypt(encrypted_b64 string) (string, error) {
 	// fmt.Println("body = ", hex.EncodeToString(body))
 	decrypted, err := aesgcm.Open(nil, iv, body, nil)
 	if err != nil {
+		fmt.Println("err = ", err)
 		return "", err
 	}
 	return string(decrypted), nil
@@ -183,8 +194,8 @@ func DecryptLicense(licenseEncrypted string) (*License, error) {
 	if err != nil {
 		return nil, err
 	}
-	if license.Key == "" || (license.DeviceInfo.Mac == "" || license.DeviceInfo.WifiMac == "") || license.Expire == "" || license.Start == 0 || (license.Meta == nil || len(license.Meta) == 0) || license.MetaHash == "" {
-		return nil, fmt.Errorf("invalid license data")
+	if license.Key == "" || (license.DeviceInfo.Mac == "" || license.DeviceInfo.WifiMac == "") || license.Expire == "" || license.Start == 0 || license.Meta == nil || license.MetaHash == "" {
+		return nil, errors.New("invalid license data")
 	}
 	return license, nil
 }
@@ -216,16 +227,16 @@ func (license *License) NextToken(lastToken *string) (string, error) {
 	}
 	lastTokenJson, err := AesGcmDecrypt(*lastToken)
 	if err != nil {
-		return "", fmt.Errorf(DecryptErrorMsg)
+		return "", errors.New(DecryptErrorMsg)
 	}
-	lastTokenParsed := Token{}
+	var lastTokenParsed Token
 	err = json.Unmarshal([]byte(lastTokenJson), &lastTokenParsed)
 	if err != nil {
-		return "", fmt.Errorf(DecryptErrorMsg)
+		return "", errors.New(DecryptErrorMsg)
 	}
 	currentTime := time.Now().Unix()
 	if lastTokenParsed.TimeStamp > currentTime {
-		return "", fmt.Errorf(ExpireErrorMsg)
+		return "", errors.New(ExpireErrorMsg)
 	}
 	newToken := Token{LastToken: *lastToken, TimeStamp: currentTime, TimeDelta: license.Delta}
 	newTokenJson, err := json.Marshal(newToken)

@@ -3,13 +3,14 @@ package main
 import (
 	"core"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 )
 
 func main() {
 	const (
-		DATA_DIR     = "./" // "/etc/apex-privatebox/"
+		DATA_DIR     = "/etc/apex-privatebox/"
 		LICENSE_FILE = DATA_DIR + "license"
 
 		SUCCESS            = 0
@@ -53,7 +54,7 @@ func main() {
 	debug := len(os.Args) > 2 && os.Args[2] == "debug"
 	if len(os.Args) < 2 || os.Args[1] == "" {
 		result = ERR_INPUT
-		err = fmt.Errorf("no token provided")
+		err = errors.New("no token provided")
 		return
 	}
 	lastToken := os.Args[1]
@@ -64,17 +65,17 @@ func main() {
 	}
 	if readErr != nil {
 		if os.IsNotExist(readErr) {
+			result = ERR_NOT_REGISTERED
 			if debug {
 				fmt.Println("license key file not found")
 			}
-			result = ERR_NOT_REGISTERED
-			err = fmt.Errorf("license file not found: %v", readErr)
+			err = errors.New("license file not found")
 		} else {
 			result = ERR_FILE_IO
 			if debug {
 				fmt.Println("read license failed: ", readErr)
 			}
-			err = fmt.Errorf("read license failed: %v", readErr)
+			err = errors.New("read license failed")
 		}
 		return
 	}
@@ -84,7 +85,7 @@ func main() {
 		if debug {
 			fmt.Println("decrypt license failed: ", string(license_data))
 		}
-		err = fmt.Errorf("decrypt license failed: %v", decryptLicenseErr)
+		err = errors.New("decrypt license failed: " + decryptLicenseErr.Error())
 		return
 	}
 	if debug {
@@ -105,24 +106,24 @@ func main() {
 			if debug {
 				fmt.Println("decrypt token failed: ", lastToken)
 			}
-			err = fmt.Errorf("decrypt token failed: %v", nextTokenErr)
+			err = errors.New("decrypt token failed")
 		} else if core.IsExpiredError(nextTokenErr) {
 			result = ERR_EXPIRED
 			if debug {
 				fmt.Println("license expired")
 			}
-			err = fmt.Errorf("license expired")
+			err = errors.New("license expired")
 		} else {
 			result = ERR_UNKNOWN
 			if debug {
 				fmt.Println("unknown error: ", nextTokenErr)
 			}
-			err = fmt.Errorf("unknown error: %v", nextTokenErr)
+			err = errors.New("unknown error")
 		}
 		return
 	} else if nextToken == "" {
 		result = ERR_EXPIRED
-		err = fmt.Errorf("license expired")
+		err = errors.New("license expired")
 		return
 	}
 	outputToken = nextToken
