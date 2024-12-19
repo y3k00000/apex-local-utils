@@ -17,7 +17,7 @@ if [ "$DEBUG" = "debug" ]; then
     GOBUILDER="go"
 fi  
 
-printf "Building for OS: %s, ARCH: %s\n" "$OS" "$ARCH"
+printf "Building for OS: %s, ARCH: %s, GOBUILDER=%s\n" "$OS" "$ARCH" "$GOBUILDER"
 
 SUFFIX=""
 if [ "$OS" = "windows" ]; then

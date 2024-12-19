@@ -3,8 +3,6 @@ package main
 import (
 	"bytes"
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -54,17 +52,17 @@ func httpPostJson(url string, body map[string]interface{}) (string, error) {
 	return string(result_body), nil
 }
 
-func pseudoResponse() (string, error) {
-	expoire_encrypted, _ := core.AesGcmEncrypt("2025-10-10 00:00:00")
-	left_encrypted, _ := core.AesGcmEncrypt(fmt.Sprintf("%d", 720*24*60*60))
-	license := map[string]interface{}{"seller": "順發3D", "name": "華碩電惱", "total_pieces": 1000}
-	license_json, _ := json.Marshal(license)
-	license_encrypted, _ := core.AesGcmEncrypt(string(license_json))
-	license_hash := sha256.Sum256(license_json)
-	response := core.RegisterResponse{Result: 0, Expire: expoire_encrypted, Left: left_encrypted, License: license_encrypted, LicenseHash: base64.URLEncoding.EncodeToString(license_hash[:]), Message: "0"}
-	response_json, _ := json.Marshal(response)
-	return string(response_json), nil
-}
+// func pseudoResponse() (string, error) {
+// 	expoire_encrypted, _ := core.AesGcmEncrypt("2025-10-10 00:00:00")
+// 	left_encrypted, _ := core.AesGcmEncrypt(fmt.Sprintf("%d", 720*24*60*60))
+// 	license := map[string]interface{}{"seller": "順發3D", "name": "華碩電惱", "total_pieces": 1000}
+// 	license_json, _ := json.Marshal(license)
+// 	license_encrypted, _ := core.AesGcmEncrypt(string(license_json))
+// 	license_hash := sha256.Sum256(license_json)
+// 	response := core.RegisterResponse{Result: 0, Expire: expoire_encrypted, Left: left_encrypted, License: license_encrypted, LicenseHash: base64.URLEncoding.EncodeToString(license_hash[:]), Message: "0"}
+// 	response_json, _ := json.Marshal(response)
+// 	return string(response_json), nil
+// }
 
 func registerSerial(ethMac string, serial string, debug bool) (result *core.RegisterResponse, err error) {
 	ethMac_encrypted, err := core.AesGcmEncrypt(ethMac)
@@ -117,24 +115,26 @@ func main() {
 		ERR_INPUT       = -7
 		ERR_UNKNOWN     = -8
 	)
-	var err error
+	var err error = nil
 	var msg string
 	var license *core.License = nil
 	var result = ERR_UNKNOWN
 	var registerResult *core.RegisterResponse
 	defer func() {
 		exit_code := 0
+		message := msg
 		if err != nil {
-			msg = err.Error()
+			message = err.Error()
 			license = nil
 			exit_code = 1
 		}
-		outputContent := map[string]interface{}{"msg": msg, "result": result}
+		fmt.Println("msg = ", message)
+		outputContent := map[string]interface{}{"msg": message, "result": result}
 		if license != nil {
 			outputContent["license"] = license.Meta
 			outputContent["expire"] = license.Expire
 			outputContent["license_hash"] = license.MetaHash
-			outputContent["token"] = license.NextToken(nil)
+			outputContent["token"], _ = license.NextToken(nil)
 		}
 		output, err := json.Marshal(outputContent)
 		if err != nil {
@@ -150,17 +150,17 @@ func main() {
 	}
 	serial := os.Args[1]
 	debug := len(os.Args) > 2 && os.Args[2] == "debug"
-	_, err = os.ReadFile(LICENSE_FILE)
-	if err == nil {
+	_, licenseReadErr := os.ReadFile(LICENSE_FILE)
+	if licenseReadErr == nil {
 		result = ERR_REGISTERED
 		err = fmt.Errorf("already registered")
 		if debug {
 			fmt.Println("already registered")
 		}
 		return
-	} else if !os.IsNotExist(err) {
+	} else if !os.IsNotExist(licenseReadErr) {
 		result = ERR_FILE_IO
-		err = fmt.Errorf("read crypt key failed: %v", err)
+		err = fmt.Errorf("read crypt key failed: %v", licenseReadErr)
 		if debug {
 			fmt.Println("read crypt key failed")
 		}
@@ -178,59 +178,63 @@ func main() {
 	if debug {
 		fmt.Printf("length of device_info_splits = %d\n", len(device_info_splits))
 	}
-	device_info_encrypted_raw, err := shamir.Combine(device_info_splits...)
-	if err != nil {
+	device_info_encrypted_raw, deviceInfoMergeErr := shamir.Combine(device_info_splits...)
+	if deviceInfoMergeErr != nil {
 		result = ERR_DEVICE_INFO
-		err = fmt.Errorf("device info recovery failed: %v", err)
+		err = fmt.Errorf("device info recovery failed: %v", deviceInfoMergeErr)
 		return
 	}
 	device_info_encrypted := string(device_info_encrypted_raw)
 	if debug {
 		fmt.Printf("device_info_encrypted = %s\n", device_info_encrypted)
 	}
-	device_info_decrypted, err := core.AesGcmDecrypt(device_info_encrypted)
-	if err != nil {
+	device_info_decrypted, deviceInfoDecryptErr := core.AesGcmDecrypt(device_info_encrypted)
+	if deviceInfoDecryptErr != nil {
 		result = ERR_ENCRYPT
-		err = fmt.Errorf("device info decryption failed: %v", err)
+		err = fmt.Errorf("device info decryption failed: %v", deviceInfoDecryptErr)
 		return
 	}
 	if debug {
 		fmt.Printf("device_info_decrypted = %s\n", device_info_decrypted)
 	}
 	var device_info core.DeviceInfo = core.DeviceInfo{}
-	err = json.Unmarshal([]byte(device_info_decrypted), &device_info)
-	if err != nil {
+	deviceInfoUnmarshalErr := json.Unmarshal([]byte(device_info_decrypted), &device_info)
+	if deviceInfoUnmarshalErr != nil {
 		result = ERR_DEVICE_INFO
-		err = fmt.Errorf("device info unmarshal failed: %v", err)
+		err = fmt.Errorf("device info unmarshal failed: %v", deviceInfoUnmarshalErr)
 		return
 	}
-	registerResult, err = registerSerial(device_info.Mac, serial, debug)
+	registerResult, registerErr := registerSerial(device_info.Mac, serial, debug)
 	if debug {
 		fmt.Printf("registerResult = %+v\n", registerResult)
 	}
-	if err != nil || registerResult.Result != 0 {
+	if registerErr != nil || registerResult.Result != 0 {
 		result = ERR_REGISTER
-		err = fmt.Errorf("register failed: %v", err)
+		err = fmt.Errorf("register failed: %v", registerErr)
 		return
 	}
 	crypt_key := make([]byte, 32)
 	rand.Read(crypt_key)
-	license, err = registerResult.ParseLicense(crypt_key, device_info, time.Now())
+	currentTime := time.Now()
+	license, err = registerResult.ParseLicense(crypt_key, device_info, currentTime)
 	if err != nil {
 		result = ERR_UNKNOWN
 		err = fmt.Errorf("license parse failed: %v", err)
 		return
 	}
-	license_json, err := json.Marshal(license)
-	if err != nil {
+	if debug {
+		fmt.Printf("license = %+v\n", license)
+	}
+	license_json, licenseMarshalErr := json.Marshal(license)
+	if licenseMarshalErr != nil {
 		result = ERR_UNKNOWN
-		err = fmt.Errorf("license marshal failed: %v", err)
+		err = fmt.Errorf("license marshal failed: %v", licenseMarshalErr)
 		return
 	}
-	license_encrypted, err := core.AesGcmEncrypt(string(license_json))
-	if err != nil {
+	license_encrypted, licenseEncryptErr := core.AesGcmEncrypt(string(license_json))
+	if licenseEncryptErr != nil {
 		result = ERR_ENCRYPT
-		err = fmt.Errorf("license encryption failed: %v", err)
+		err = fmt.Errorf("license encryption failed: %v", licenseEncryptErr)
 		return
 	}
 	err = os.WriteFile(LICENSE_FILE, []byte(license_encrypted), 0644)

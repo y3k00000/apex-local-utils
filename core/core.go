@@ -31,14 +31,40 @@ type RegisterResponse struct {
 	LicenseHash string `json:"license_hash"`
 }
 
+type Token struct {
+	LastToken string `json:"last_call"`
+	TimeStamp int64  `json:"time_stamp"`
+	TimeDelta int64  `json:"time_delta"`
+}
+
 type License struct {
 	Key        string                 `json:"key"`
 	DeviceInfo DeviceInfo             `json:"device_info"`
 	Expire     string                 `json:"expire"`
 	Start      int64                  `json:"start"`
-	Left       int                    `json:"left"`
+	Delta      int64                  `json:"delta"`
+	Left       int64                  `json:"left"`
 	Meta       map[string]interface{} `json:"meta"`
 	MetaHash   string                 `json:"meta_hash"`
+}
+
+const (
+	DecryptErrorMsg = "cipher: decryption failed"
+	ExpireErrorMsg  = "license: expired"
+)
+
+func IsDecryptError(err error) bool {
+	if err != nil {
+		return err.Error() == DecryptErrorMsg
+	}
+	return false
+}
+
+func IsExpiredError(err error) bool {
+	if err != nil {
+		return err.Error() == ExpireErrorMsg
+	}
+	return false
 }
 
 func AesGcmEncrypt(plain string) (string, error) {
@@ -91,6 +117,10 @@ func AesGcmDecrypt(encrypted_b64 string) (string, error) {
 	// fmt.Println(string(decrypted))
 }
 
+func parsePHPTime(phpTime string) (time.Time, error) {
+	return time.Parse("2006-01-02 15:04:05", phpTime)
+}
+
 func (response *RegisterResponse) ParseLicense(key []byte, deviceInfo DeviceInfo, start time.Time) (*License, error) {
 	expireDecrypted, err := AesGcmDecrypt(response.Expire)
 	if err != nil {
@@ -100,10 +130,15 @@ func (response *RegisterResponse) ParseLicense(key []byte, deviceInfo DeviceInfo
 	if err != nil {
 		return nil, err
 	}
-	leftInt, err := strconv.Atoi(leftDecrypted)
+	leftInt, err := strconv.ParseInt(leftDecrypted, 10, 64)
 	if err != nil {
 		return nil, err
 	}
+	expireTime, err := parsePHPTime(expireDecrypted)
+	if err != nil {
+		return nil, err
+	}
+	delta := expireTime.Unix() - leftInt - start.Unix()
 	keyBase64 := base64.URLEncoding.EncodeToString(key)
 	licenseDecrypted, err := AesGcmDecrypt(response.License)
 	if err != nil {
@@ -115,7 +150,7 @@ func (response *RegisterResponse) ParseLicense(key []byte, deviceInfo DeviceInfo
 		return nil, err
 	}
 	metaHash := response.LicenseHash
-	return &License{Key: keyBase64, DeviceInfo: deviceInfo, Expire: expireDecrypted, Start: start.Unix(), Left: leftInt, Meta: meta, MetaHash: metaHash}, nil
+	return &License{Key: keyBase64, DeviceInfo: deviceInfo, Expire: expireDecrypted, Start: start.Unix(), Left: leftInt, Meta: meta, MetaHash: metaHash, Delta: delta}, nil
 }
 
 func (license *License) Encrypt() (string, error) {
@@ -131,7 +166,7 @@ func (license *License) Encrypt() (string, error) {
 }
 
 func (license *License) ParseExpire() (time.Time, error) {
-	expire, err := time.Parse("2006-01-02 15:04:05", license.Expire)
+	expire, err := parsePHPTime(license.Expire)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -166,11 +201,40 @@ func (license *License) CheckExpire() (bool, error) {
 	return true, nil
 }
 
-func (license *License) NextToken(lastToken *string) string {
-	// var lastTokenBytes []byte
+func (license *License) NextToken(lastToken *string) (string, error) {
 	if lastToken == nil {
-		return "012345"
+		newToken := Token{LastToken: "", TimeStamp: time.Now().Unix(), TimeDelta: license.Delta}
+		newTokenJson, err := json.Marshal(newToken)
+		if err != nil {
+			return "", err
+		}
+		newTokenEncrypted, err := AesGcmEncrypt(string(newTokenJson))
+		if err != nil {
+			return "", err
+		}
+		return newTokenEncrypted, nil
 	}
-	// TODO
-	return ""
+	lastTokenJson, err := AesGcmDecrypt(*lastToken)
+	if err != nil {
+		return "", fmt.Errorf(DecryptErrorMsg)
+	}
+	lastTokenParsed := Token{}
+	err = json.Unmarshal([]byte(lastTokenJson), &lastTokenParsed)
+	if err != nil {
+		return "", fmt.Errorf(DecryptErrorMsg)
+	}
+	currentTime := time.Now().Unix()
+	if lastTokenParsed.TimeStamp > currentTime {
+		return "", fmt.Errorf(ExpireErrorMsg)
+	}
+	newToken := Token{LastToken: *lastToken, TimeStamp: currentTime, TimeDelta: license.Delta}
+	newTokenJson, err := json.Marshal(newToken)
+	if err != nil {
+		return "", err
+	}
+	newTokenEncrypted, err := AesGcmEncrypt(string(newTokenJson))
+	if err != nil {
+		return "", err
+	}
+	return newTokenEncrypted, nil
 }
