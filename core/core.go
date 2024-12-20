@@ -234,6 +234,21 @@ func (license *License) NextToken(lastToken *string) (string, error) {
 	if err != nil {
 		return "", errors.New(DecryptErrorMsg)
 	}
+	if lastTokenParsed.LastToken != "" {
+		lastLastToken := lastTokenParsed.LastToken
+		lastLastTokenJson, err := AesGcmDecrypt(lastLastToken)
+		if err != nil {
+			return "", errors.New(DecryptErrorMsg)
+		}
+		var lastLastTokenParsed Token
+		err = json.Unmarshal([]byte(lastLastTokenJson), &lastLastTokenParsed)
+		if err != nil {
+			return "", errors.New(DecryptErrorMsg)
+		}
+		if lastLastTokenParsed.TimeStamp > lastTokenParsed.TimeStamp {
+			return "", errors.New(ExpireErrorMsg)
+		}
+	}
 	currentTime := time.Now().Unix()
 	if lastTokenParsed.TimeStamp > currentTime {
 		return "", errors.New(ExpireErrorMsg)
