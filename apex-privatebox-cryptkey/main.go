@@ -10,9 +10,6 @@ import (
 
 func main() {
 	const (
-		DATA_DIR     = "/etc/apex-privatebox/"
-		LICENSE_FILE = DATA_DIR + "license"
-
 		SUCCESS            = 0
 		ERR_FILE_IO        = -1
 		ERR_DECRYPT        = -2
@@ -58,7 +55,7 @@ func main() {
 		return
 	}
 	lastToken := os.Args[1]
-	license_data, readErr := os.ReadFile(LICENSE_FILE)
+	license_data, readErr := os.ReadFile(core.GetLicenseFilePath(836))
 	if debug {
 		fmt.Println("license_data = ", license_data)
 		fmt.Println("lastToken = ", lastToken)

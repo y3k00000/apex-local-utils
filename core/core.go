@@ -13,6 +13,35 @@ import (
 	"time"
 )
 
+const (
+	DATA_DIR           = "/etc/apex-privatebox/"
+	LICENSE_FILE       = DATA_DIR + "license"
+	DEVICE_INFO_SPLITS = 10
+)
+
+func DeviceInfoFileName(i int) string {
+	return fmt.Sprintf("device_info_%02d.info", i)
+}
+
+func DeviceInfoFilePath(i int) string {
+	return fmt.Sprintf("%sdevice_info_%02d.info", DATA_DIR, i)
+}
+
+func GetDeviceInfoFiles() (result []string) {
+	for i := 0; i < DEVICE_INFO_SPLITS; i++ {
+		result = append(result, DeviceInfoFilePath(i))
+	}
+	return
+}
+
+func GetDataDir(salt int64) string {
+	return DATA_DIR
+}
+
+func GetLicenseFilePath(salt int64) string {
+	return LICENSE_FILE
+}
+
 type DeviceInfo struct {
 	Mac     string `json:"mac"`
 	WifiMac string `json:"wifi-mac"`

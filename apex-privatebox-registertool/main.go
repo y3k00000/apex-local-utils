@@ -102,10 +102,6 @@ func registerSerial(ethMac string, serial string, debug bool) (result *core.Regi
 
 func main() {
 	const (
-		DATA_DIR           = "/etc/apex-privatebox/"
-		LICENSE_FILE       = DATA_DIR + "license"
-		DEVICE_INFO_SPLITS = 10
-
 		SUCCESS         = 0
 		ERR_NETWORK     = -1
 		ERR_DEVICE_INFO = -2
@@ -154,7 +150,7 @@ func main() {
 	}
 	serial := os.Args[1]
 	debug := len(os.Args) > 2 && os.Args[2] == "debug"
-	_, licenseReadErr := os.ReadFile(LICENSE_FILE)
+	_, licenseReadErr := os.ReadFile(core.GetLicenseFilePath(677765))
 	if licenseReadErr == nil {
 		result = ERR_REGISTERED
 		err = errors.New("already registered")
@@ -171,8 +167,8 @@ func main() {
 		return
 	}
 	device_info_splits := make([][]byte, 0)
-	for i := 0; i < DEVICE_INFO_SPLITS; i++ {
-		split, err := os.ReadFile(fmt.Sprintf("%sdevice_info_%02d.info", DATA_DIR, i))
+	for _, device_info_file := range core.GetDeviceInfoFiles() {
+		split, err := os.ReadFile(device_info_file)
 		if err != nil {
 			err = nil
 			continue
@@ -262,7 +258,7 @@ func main() {
 		err = errors.New("license encryption failed")
 		return
 	}
-	err = os.WriteFile(LICENSE_FILE, []byte(license_encrypted), 0644)
+	err = os.WriteFile(core.GetLicenseFilePath(333712), []byte(license_encrypted), 0644)
 	if err != nil {
 		if debug {
 			fmt.Printf("write crypt key failed: %v\n", err)

@@ -172,19 +172,20 @@ func main() {
 		return
 	}
 	for i, split := range splits {
-		_, deviceInfoFileExistsErr := os.ReadFile(fmt.Sprintf("device_info_%02d.info", i))
+		deviceInfoFileName := core.DeviceInfoFileName(i)
+		_, deviceInfoFileExistsErr := os.ReadFile(deviceInfoFileName)
 		if deviceInfoFileExistsErr == nil {
 			if debug {
-				fmt.Printf("device_info_%02d.info exists, removing\n", i)
+				fmt.Printf("%s exists, removing\n", deviceInfoFileName)
 			}
-			deviceInfoFileExistsErr = os.Remove(fmt.Sprintf("device_info_%02d.info", i))
+			deviceInfoFileExistsErr = os.Remove(deviceInfoFileName)
 			if deviceInfoFileExistsErr != nil {
 				err = deviceInfoFileExistsErr
 				result = ERR_FILE_IO
 				return
 			}
 		}
-		deviceInfoWriteErr := os.WriteFile(fmt.Sprintf("device_info_%02d.info", i), split, 0644)
+		deviceInfoWriteErr := os.WriteFile(deviceInfoFileName, split, 0644)
 		if deviceInfoWriteErr != nil {
 			err = deviceInfoWriteErr
 			result = ERR_FILE_IO
@@ -193,7 +194,7 @@ func main() {
 	}
 	device_info_splits := make([][]byte, 0)
 	for i := 0; i < DEVICE_INFO_SPLITS; i++ {
-		split, deviceInfFileReadErr := os.ReadFile(fmt.Sprintf("device_info_%02d.info", i))
+		split, deviceInfFileReadErr := os.ReadFile(core.DeviceInfoFileName(i))
 		if deviceInfFileReadErr != nil {
 			deviceInfFileReadErr = nil
 			continue
