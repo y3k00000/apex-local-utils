@@ -150,7 +150,7 @@ func AesGcmDecrypt(encrypted_b64 string) (string, error) {
 	// fmt.Println("body = ", hex.EncodeToString(body))
 	decrypted, err := aesgcm.Open(nil, iv, body, nil)
 	if err != nil {
-		fmt.Println("err = ", err)
+		// fmt.Println("err = ", err)
 		return "", err
 	}
 	return string(decrypted), nil
