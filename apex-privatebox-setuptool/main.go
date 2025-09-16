@@ -9,11 +9,75 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 
 	"core"
 
 	"github.com/lafriks/go-shamir"
 )
+
+func callPowerShell(command string) (string, error) {
+	cmd := exec.Command("powershell", "-Command", command)
+	output, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	id := strings.TrimSpace(string(output))
+	if id == "" {
+		return "", errors.New("IdentifyingNumber is empty")
+	}
+	return id, nil
+}
+
+func getIdentifyingNumber() (string, error) {
+	return callPowerShell(`Get-WmiObject -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty IdentifyingNumber | Out-String`)
+}
+
+func getProductName() (string, error) {
+	return callPowerShell(`Get-WmiObject -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty Name | Out-String`)
+}
+
+func getProductVendor() (string, error) {
+	return callPowerShell(`Get-WmiObject -Class Win32_ComputerSystemProduct | Select-Object -ExpandProperty Vendor | Out-String`)
+}
+
+func createTrimmedString(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\t", "")
+	return strings.ReplaceAll(s, " ", "")
+}
+
+func getIdentityStringWindows() (string, error) {
+	// now := time.Now()
+	id, err := getIdentifyingNumber()
+	if err != nil {
+		return "", err
+	}
+	// elapsed := time.Since(now)
+	// fmt.Printf("getIdentifyingNumber took %d ms\n", elapsed.Milliseconds())
+	// now = time.Now()
+	name, err := getProductName()
+	if err != nil {
+		return "", err
+	}
+	// elapsed = time.Since(now)
+	// fmt.Printf("getProductName took %d ms\n", elapsed.Milliseconds())
+	// now = time.Now()
+	vendor, err := getProductVendor()
+	if err != nil {
+		return "", err
+	}
+	// elapsed = time.Since(now)
+	// fmt.Printf("getProductVendor took %d ms\n", elapsed.Milliseconds())
+	if id == "" && name == "" && vendor == "" {
+		return "", errors.New("failed to get any identity information")
+	}
+	return fmt.Sprintf("%s-%s-%s", createTrimmedString(vendor), createTrimmedString(name), createTrimmedString(id)), nil
+}
 
 func findInterfaceHWAddr(name string) (hwAddr string, err error) {
 	interfaces, err := net.Interfaces()
@@ -76,6 +140,22 @@ func getAsusWifiMac() (string, error) {
 	return mac, nil
 }
 
+func getIdentityStringLinux() (mac string, wifi_mac string, err error) {
+	mac, getMacErr := getAsusEthMac()
+	if getMacErr != nil {
+		err = getMacErr
+		// mac = "00:00:00:00:00:00"
+		return
+	}
+	wifiMac, getMacErr := getAsusWifiMac()
+	if getMacErr != nil {
+		err = getMacErr
+		// wifiMac = "00:00:00:00:00:00"
+		return
+	}
+	return mac, wifiMac, nil
+}
+
 func onboardMAC(ethMac string, wifiMac string) (result core.OnboardResponse, err error) {
 	// return core.OnboardResponse{Result: 0, Message: "Success"}, nil
 	ethMac_encrypted, err := core.AesGcmEncrypt(ethMac)
@@ -128,18 +208,36 @@ func main() {
 	}()
 	// testAesDecrypt()
 	// testListInterfaces()
-	mac, getMacErr := getAsusEthMac()
-	if getMacErr != nil {
-		err = getMacErr
+	var mac, wifiMac string
+	switch os := runtime.GOOS; os {
+	case "windows":
+		// fmt.Println("Windows")
+		mac, err = getIdentityStringWindows()
+		if err != nil {
+			result = ERR_DEVICE_INFO
+			return
+		}
+		wifiMac = ""
+	case "linux":
+		// fmt.Println("Linux")
+		mac, wifiMac, err = getIdentityStringLinux()
+		if err != nil {
+			result = ERR_DEVICE_INFO
+			return
+		}
+	case "darwin":
+		// fmt.Println("MacOS")
+		err = errors.New("MacOS is not supported")
 		result = ERR_DEVICE_INFO
-		// mac = "00:00:00:00:00:00"
+		return
+	default:
+		err = errors.New("unsupported platform")
+		result = ERR_DEVICE_INFO
 		return
 	}
-	wifiMac, getMacErr := getAsusWifiMac()
-	if getMacErr != nil {
-		err = getMacErr
+	if mac == "" {
+		err = errors.New("mac is empty")
 		result = ERR_DEVICE_INFO
-		// wifiMac = "00:00:00:00:00:00"
 		return
 	}
 	onboard_response, onBoardErr := onboardMAC(mac, wifiMac)

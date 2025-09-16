@@ -2,3 +2,7 @@ github.com/lafriks/go-shamir v1.2.0 h1:z/Nr5oTcW3JD/YXJB9NuhhGX2wAVg/PNHcy85l9Qt
 github.com/lafriks/go-shamir v1.2.0/go.mod h1:XjkARDzr3j33n2HDGrjzsIkpp2dzZFUAjYNSkmA4tTU=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/sstallion/go-hid v0.15.0 h1:WERW/VW3Us6N73V2qa7HjdqWQvwHd0CoRDOP/N707/w=
+github.com/sstallion/go-hid v0.15.0/go.mod h1:fPKp4rqx0xuoTV94gwKojsPG++KNKhxuU88goGuGM7I=
+golang.org/x/sys v0.8.0 h1:EBmGv8NaZBZTWvrbjNoL6HVt+IVy3QDQpJs7VRIw3tU=
+golang.org/x/sys v0.8.0/go.mod h1:oPkhp1MJrh7nUepCBck5+mAzfO9JrbApNNgaTdGDITg=
