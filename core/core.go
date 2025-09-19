@@ -9,22 +9,47 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime"
 	"strconv"
 	"time"
 )
 
 const (
-	DATA_DIR           = "/etc/apex-privatebox/"
-	LICENSE_FILE       = DATA_DIR + "license"
-	DEVICE_INFO_SPLITS = 10
+	DATA_DIR_LINUX       = "/etc/apex-privatebox/"
+	DATA_DIR_WINDOWS     = ".\\configs\\"
+	LICENSE_FILE_LINUX   = DATA_DIR_LINUX + "license"
+	LICENSE_FILE_WINDOWS = DATA_DIR_WINDOWS + "license"
+	DEVICE_INFO_SPLITS   = 10
 )
+
+func getPlatformDataDir() string {
+	switch os := runtime.GOOS; os {
+	case "windows":
+		return DATA_DIR_WINDOWS
+	case "linux":
+		return DATA_DIR_LINUX
+	default:
+		return "./configs/"
+	}
+}
+
+func getPlatformLicenseFile() string {
+	switch os := runtime.GOOS; os {
+	case "windows":
+		return LICENSE_FILE_WINDOWS
+	case "linux":
+		return LICENSE_FILE_LINUX
+	default:
+		return "./configs/license"
+	}
+}
 
 func DeviceInfoFileName(i int) string {
 	return fmt.Sprintf("device_info_%02d.info", i)
 }
 
 func DeviceInfoFilePath(i int) string {
-	return fmt.Sprintf("%sdevice_info_%02d.info", DATA_DIR, i)
+	return fmt.Sprintf("%sdevice_info_%02d.info", getPlatformDataDir(), i)
 }
 
 func GetDeviceInfoFiles() (result []string) {
@@ -35,11 +60,11 @@ func GetDeviceInfoFiles() (result []string) {
 }
 
 func GetDataDir(salt int64) string {
-	return DATA_DIR
+	return getPlatformDataDir()
 }
 
 func GetLicenseFilePath(salt int64) string {
-	return LICENSE_FILE
+	return getPlatformLicenseFile()
 }
 
 type DeviceInfo struct {
@@ -223,7 +248,7 @@ func DecryptLicense(licenseEncrypted string) (*License, error) {
 	if err != nil {
 		return nil, err
 	}
-	if license.Key == "" || (license.DeviceInfo.Mac == "" || license.DeviceInfo.WifiMac == "") || license.Expire == "" || license.Start == 0 || license.Meta == nil || license.MetaHash == "" {
+	if license.Key == "" || (license.DeviceInfo.Mac == "" && license.DeviceInfo.WifiMac == "") || license.Expire == "" || license.Start == 0 || license.Meta == nil || license.MetaHash == "" {
 		return nil, errors.New("invalid license data")
 	}
 	return license, nil

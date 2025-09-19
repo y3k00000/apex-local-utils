@@ -193,6 +193,7 @@ func main() {
 	var result int = ERR_UNKNOWN
 	var onboard_response core.OnboardResponse
 	debug := len(os.Args) > 1 && os.Args[1] == "debug"
+	skipOnboard := len(os.Args) > 2 && os.Args[2] == "skip_onboard"
 	defer func() {
 		exit_code := 0
 		if err != nil {
@@ -211,7 +212,9 @@ func main() {
 	var mac, wifiMac string
 	switch os := runtime.GOOS; os {
 	case "windows":
-		// fmt.Println("Windows")
+		if debug {
+			fmt.Println("OS = Windows")
+		}
 		mac, err = getIdentityStringWindows()
 		if err != nil {
 			result = ERR_DEVICE_INFO
@@ -219,35 +222,55 @@ func main() {
 		}
 		wifiMac = ""
 	case "linux":
-		// fmt.Println("Linux")
+		if debug {
+			fmt.Println("OS = Linux")
+		}
 		mac, wifiMac, err = getIdentityStringLinux()
 		if err != nil {
 			result = ERR_DEVICE_INFO
 			return
 		}
 	case "darwin":
-		// fmt.Println("MacOS")
+		if debug {
+			fmt.Println("OS = MacOS")
+		}
 		err = errors.New("MacOS is not supported")
 		result = ERR_DEVICE_INFO
 		return
 	default:
+		if debug {
+			fmt.Println("OS = Unknown")
+		}
 		err = errors.New("unsupported platform")
 		result = ERR_DEVICE_INFO
 		return
+	}
+	if debug {
+		fmt.Printf("mac = %s\n", mac)
+		fmt.Printf("wifiMac = %s\n", wifiMac)
 	}
 	if mac == "" {
 		err = errors.New("mac is empty")
 		result = ERR_DEVICE_INFO
 		return
 	}
-	onboard_response, onBoardErr := onboardMAC(mac, wifiMac)
-	if onBoardErr != nil {
-		err = onBoardErr
-		result = ERR_REGISTER
-		return
-	} else if onboard_response.Result != 0 {
-		result = ERR_REGISTER
-		return
+	if !skipOnboard {
+		if debug {
+			fmt.Println("Starting onboard process")
+		}
+		onboard_response, onBoardErr := onboardMAC(mac, wifiMac)
+		if onBoardErr != nil {
+			err = onBoardErr
+			result = ERR_REGISTER
+			return
+		} else if onboard_response.Result != 0 {
+			result = ERR_REGISTER
+			return
+		}
+		if debug {
+			fmt.Println("Onboard process finished")
+			fmt.Printf("onboard_response = %+v\n", onboard_response)
+		}
 	}
 	device_info, deviceInfoMarshalErr := json.Marshal(map[string]string{"mac": mac, "wifi-mac": wifiMac})
 	if deviceInfoMarshalErr != nil {

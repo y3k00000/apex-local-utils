@@ -57,7 +57,7 @@ func main() {
 	lastToken := os.Args[1]
 	license_data, readErr := os.ReadFile(core.GetLicenseFilePath(836))
 	if debug {
-		fmt.Println("license_data = ", license_data)
+		fmt.Println("license_data = ", string(license_data))
 		fmt.Println("lastToken = ", lastToken)
 	}
 	if readErr != nil {

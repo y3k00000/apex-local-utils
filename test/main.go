@@ -1,11 +1,5 @@
 package main
 
-import (
-	"fmt"
-	"math/rand"
-	"time"
-)
-
 func main() {
 	// time test
 	// fmt.Println(time.Now())
@@ -31,22 +25,22 @@ func main() {
 	// }
 
 	// PHP time test
-	parsePHPTime := func(phpTime string) (time.Time, error) {
-		return time.Parse("2006-01-02 15:04:05", phpTime)
-	}
-	for y := 1975; y < 2050; y++ {
-		for m := 1; m < 13; m++ {
-			for d := 1; d < 29; d++ {
-				dateString := fmt.Sprintf("%d-%02d-%02d %02d:%02d:%02d", y, m, d, rand.Intn(12), rand.Intn(60), rand.Intn(60))
-				date, err := parsePHPTime(dateString)
-				if err != nil {
-					fmt.Println(err)
-				} else {
-					fmt.Println(date.Format(time.RubyDate))
-				}
-			}
-		}
-	}
+	// parsePHPTime := func(phpTime string) (time.Time, error) {
+	// 	return time.Parse("2006-01-02 15:04:05", phpTime)
+	// }
+	// for y := 1975; y < 2050; y++ {
+	// 	for m := 1; m < 13; m++ {
+	// 		for d := 1; d < 29; d++ {
+	// 			dateString := fmt.Sprintf("%d-%02d-%02d %02d:%02d:%02d", y, m, d, rand.Intn(12), rand.Intn(60), rand.Intn(60))
+	// 			date, err := parsePHPTime(dateString)
+	// 			if err != nil {
+	// 				fmt.Println(err)
+	// 			} else {
+	// 				fmt.Println(date.Format(time.RubyDate))
+	// 			}
+	// 		}
+	// 	}
+	// }
 
 	// json marshal error test
 	// type TestStruct struct {
@@ -61,5 +55,12 @@ func main() {
 	// 	panic(err)
 	// } else {
 	// 	println(string(json))
+	// }
+
+	// get IdentityString test
+	// if id, err := getIdentityString(); err != nil {
+	// 	fmt.Println("Error:", err)
+	// } else {
+	// 	fmt.Println("Identity String:", id)
 	// }
 }
